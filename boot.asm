@@ -1,30 +1,69 @@
 [BITS 16]
-[ORG 0x7C00]
+[ORG 0x7c00]
 
 start:
-    xor ax, ax          ; Clear AX register
-    mov ds, ax          ; Set data segment to 0
-    mov es, ax          ; Set extra segment to 0
-    mov ss, ax          ; Set stack segment to 0
-    mov sp, 0x7C00      ; Initialize stack pointer
+    xor ax,ax   
+    mov ds,ax
+    mov es,ax  
+    mov ss,ax
+    mov sp,0x7c00
 
-PrintMessage:
-    mov si, Message     ; Load address of the message into SI
+TestDiskExtension:
+    mov [DriveId],dl
+    mov ah,0x41
+    mov bx,0x55aa
+    int 0x13
+    jc NotSupport
+    cmp bx,0xaa55
+    jne NotSupport
 
-print_loop:
-    lodsb               ; Load next character into AL
-    or al, al           ; Check if end of string (null terminator)
-    jz END              ; If null terminator, jump to END
-    mov ah, 0x0E        ; BIOS teletype function to print character
-    mov bh, 0           ; Set page number to 0
-    int 0x10            ; Call BIOS interrupt to print character
-    jmp print_loop      ; Repeat until end of string
+LoadLoader:
+    mov si,ReadPacket
+    mov word[si],0x10
+    mov word[si+2],5
+    mov word[si+4],0x7e00
+    mov word[si+6],0
+    mov dword[si+8],1
+    mov dword[si+0xc],0
+    mov dl,[DriveId]
+    mov ah,0x42
+    int 0x13
+    jc  ReadError
 
-END:
-    hlt                 ; Halt the CPU
-    jmp END             ; Infinite loop to prevent execution beyond bootloader
+    mov dl,[DriveId]
+    jmp 0x7e00 
 
-Message: db "Hello, world!", 0  ; Message string with null terminator
+ReadError:
+NotSupport:
+    mov ah,0x13
+    mov al,1
+    mov bx,0xa
+    xor dx,dx
+    mov bp,Message
+    mov cx,MessageLen 
+    int 0x10
 
-times 510-($-$$) db 0   ; Fill remaining space to make it exactly 512 bytes
-dw 0xAA55               ; Boot signature (BIOS requires this)
+End:
+    hlt    
+    jmp End
+    
+DriveId:    db 0
+Message:    db "We have an error in boot process"
+MessageLen: equ $-Message
+ReadPacket: times 16 db 0
+
+times (0x1be-($-$$)) db 0
+
+    db 80h
+    db 0,2,0
+    db 0f0h
+    db 0ffh,0ffh,0ffh
+    dd 1
+    dd (20*16*63-1)
+	
+    times (16*3) db 0
+
+    db 0x55
+    db 0xaa
+
+	
